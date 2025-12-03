@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <!-- CAMBIO: Añadido marginTop="60dp" para no chocar con la barra de estado -->
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Control Pant-Tilt"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginTop="60dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Estado: Desconectado"
+        android:textAlignment="center"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#D32F2F"
+        android:layout_marginTop="16dp"
+        app:layout_constraintTop_toBottomOf="@+id/tv_title"/>
+
+    <Button
+        android:id="@+id/btn_connect"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Conectar USB"
+        android:layout_marginTop="8dp"
+        app:layout_constraintTop_toBottomOf="@+id/tv_status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@+id/btn_connect">
+
+        <!-- PAN CONTROL -->
+        <TextView
+            android:id="@+id/tv_pan_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PAN: 0°"
+            android:textStyle="bold"
+            android:textSize="16sp"/>
+
+        <SeekBar
+            android:id="@+id/seek_pan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="360"
+            android:progress="180"
+            android:layout_marginBottom="24dp"/>
+
+        <!-- TILT CONTROL -->
+        <TextView
+            android:id="@+id/tv_tilt_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TILT: 0°"
+            android:textStyle="bold"
+            android:textSize="16sp"/>
+
+        <SeekBar
+            android:id="@+id/seek_tilt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="120"
+            android:progress="30"
+            android:layout_marginBottom="24dp"/>
+
+        <Button
+            android:id="@+id/btn_center"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="Centrar Cámara (0,0)"
+            android:backgroundTint="#FF9800"
+            android:layout_marginTop="16dp"/>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
