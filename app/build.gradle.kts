@@ -4,9 +4,7 @@ plugins {
 
 android {
     namespace = "com.example.pantilt"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36 // Ajustado a una versión estable común, puedes dejarlo en 36 si ya lo usas
 
     defaultConfig {
         applicationId = "com.example.pantilt"
@@ -34,7 +32,6 @@ android {
 }
 
 dependencies {
-    // Dependencias básicas que ya trae Android Studio...
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
@@ -43,7 +40,7 @@ dependencies {
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 
-    // --- TUS NUEVAS DEPENDENCIAS ---
-    implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
+    // ELIMINADA: usb-serial-for-android (Ya no se necesita hardware)
+    // MANTENIDA: Gson para crear tus JSONs
     implementation("com.google.code.gson:gson:2.10.1")
 }

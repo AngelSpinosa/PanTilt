@@ -1,38 +1,34 @@
-package com.example.pantilt; // <--- ¡VERIFICA QUE ESTO COINCIDA CON TU PROYECTO!
+package com.example.pantilt;
 
-import android.app.PendingIntent;
-import android.content.Context;
-import android.content.Intent;
-import android.hardware.usb.UsbDeviceConnection;
-import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
-import com.hoho.android.usbserial.driver.UsbSerialDriver;
-import com.hoho.android.usbserial.driver.UsbSerialPort;
-import com.hoho.android.usbserial.driver.UsbSerialProber;
 
-import java.io.IOException;
-import java.util.List;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
-    private UsbSerialPort port;
+
+    private static final String ROBOT_URL = "http://192.168.4.1/js?json=";
+
     private TextView tvStatus, tvPanLabel, tvTiltLabel;
     private SeekBar seekPan, seekTilt;
 
-    private static final String ACTION_USB_PERMISSION = "com.example.pantiltcontroller.USB_PERMISSION";
-    private static final String TAG = "RobotControl";
-
+    private static final String TAG = "RobotWifi";
     private final Gson gson = new Gson();
+
+    // Executor para no bloquear la UI con peticiones de red
+    private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
 
     // Límites de seguridad físicos
     private static final int LIMIT_YAW_MIN = -180;
@@ -40,67 +36,59 @@ public class MainActivity extends AppCompatActivity {
     private static final int LIMIT_PITCH_MIN = -30;
     private static final int LIMIT_PITCH_MAX = 90;
 
-    // Variables para control de flujo (Throttling)
+    // Throttling: Importante para no saturar el servidor HTTP del robot
     private long lastSendTime = 0;
-    private static final int SEND_INTERVAL_MS = 50;
+    private static final int SEND_INTERVAL_MS = 80; // Subido ligeramente para HTTP
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Referencias UI
+        // UI References
         tvStatus = findViewById(R.id.tv_status);
         tvPanLabel = findViewById(R.id.tv_pan_label);
         tvTiltLabel = findViewById(R.id.tv_tilt_label);
         seekPan = findViewById(R.id.seek_pan);
         seekTilt = findViewById(R.id.seek_tilt);
-        Button btnConnect = findViewById(R.id.btn_connect);
         Button btnCenter = findViewById(R.id.btn_center);
+        Button btnConnect = findViewById(R.id.btn_connect); // Botón simbólico
 
-        // Configuración inicial de Sliders
+        // Configurar Sliders
         seekPan.setMax(360);
-        seekPan.setProgress(180); // Centro lógico 0°
-
+        seekPan.setProgress(180);
         seekTilt.setMax(120);
-        seekTilt.setProgress(30); // Centro lógico 0°
+        seekTilt.setProgress(30);
 
-        btnConnect.setOnClickListener(v -> connectUsb());
+        tvStatus.setText("Modo WiFi: Conéctate a la red 'PT'");
 
-        // Listener para PAN
+        btnConnect.setText("Verificar Conexión");
+        btnConnect.setOnClickListener(v -> sendServoCommand(0,0)); // Prueba de envío
+
+        // Listener PAN
         seekPan.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 int angle = progress - 180;
                 tvPanLabel.setText("PAN: " + angle + "°");
-                int currentTiltAngle = seekTilt.getProgress() - 30;
-                sendThrottleCommand(angle, currentTiltAngle);
+                int currentTilt = seekTilt.getProgress() - 30;
+                sendThrottleCommand(angle, currentTilt);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                // Forzar envío al soltar
-                int angle = seekBar.getProgress() - 180;
-                int currentTiltAngle = seekTilt.getProgress() - 30;
-                sendServoCommand(angle, currentTiltAngle);
-            }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        // Listener para TILT
+        // Listener TILT
         seekTilt.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 int angle = progress - 30;
                 tvTiltLabel.setText("TILT: " + angle + "°");
-                int currentPanAngle = seekPan.getProgress() - 180;
-                sendThrottleCommand(currentPanAngle, angle);
+                int currentPan = seekPan.getProgress() - 180;
+                sendThrottleCommand(currentPan, angle);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                // Forzar envío al soltar
-                int angle = seekBar.getProgress() - 30;
-                int currentPanAngle = seekPan.getProgress() - 180;
-                sendServoCommand(currentPanAngle, angle);
-            }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         btnCenter.setOnClickListener(v -> {
@@ -118,75 +106,42 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void connectUsb() {
-        UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        List<UsbSerialDriver> availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager);
-
-        if (availableDrivers.isEmpty()) {
-            updateStatus("No detectado");
-            return;
-        }
-
-        UsbSerialDriver driver = availableDrivers.get(0);
-        UsbDeviceConnection connection = manager.openDevice(driver.getDevice());
-
-        if (connection == null) {
-            // NOTA: Asegúrate de que ACTION_USB_PERMISSION coincida con la constante arriba
-            PendingIntent permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
-            manager.requestPermission(driver.getDevice(), permissionIntent);
-            updateStatus("Pidiendo permiso...");
-            return;
-        }
-
-        port = driver.getPorts().get(0);
-        try {
-            port.open(connection);
-            port.setParameters(115200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
-            port.setDTR(true);
-            port.setRTS(true);
-
-            updateStatus("Conectado: " + driver.getDevice().getProductName());
-            tvStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
-
-        } catch (IOException e) {
-            updateStatus("Error: " + e.getMessage());
-            try { port.close(); } catch (IOException ignored) {}
-            port = null;
-        }
-    }
-
     private void sendServoCommand(int targetPan, int targetTilt) {
         int safePan = Math.max(LIMIT_YAW_MIN, Math.min(targetPan, LIMIT_YAW_MAX));
         int safeTilt = Math.max(LIMIT_PITCH_MIN, Math.min(targetTilt, LIMIT_PITCH_MAX));
 
+        // Construir JSON
         RobotCommand command = new RobotCommand(133, safePan, safeTilt, 0, 0);
         String jsonString = gson.toJson(command);
-        String finalData = jsonString + "\n";
 
-        Log.d(TAG, "Enviando: " + finalData);
-
-        if (port != null) {
+        // Enviar por red en segundo plano
+        networkExecutor.execute(() -> {
             try {
-                port.write(finalData.getBytes(), 1000);
-            } catch (IOException e) {
+                String urlString = ROBOT_URL + jsonString;
+
+                URL url = new URL(urlString);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(500); // Timeout rápido para no bloquear
+                conn.setReadTimeout(500);
+
+                int responseCode = conn.getResponseCode();
+
+                if (responseCode == 200) {
+                    runOnUiThread(() -> tvStatus.setText("Estado: Enviado OK"));
+                } else {
+                    Log.e(TAG, "Error HTTP: " + responseCode);
+                }
+                conn.disconnect();
+
+            } catch (Exception e) {
                 Log.e(TAG, "Error enviando: " + e.getMessage());
-                updateStatus("Error escritura");
+                runOnUiThread(() -> tvStatus.setText("Error: Verifica estar en red PT"));
             }
-        }
+        });
     }
 
-    private void updateStatus(String status) {
-        tvStatus.setText("Estado: " + status);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (port != null) {
-            try { port.close(); } catch (IOException e) { e.printStackTrace(); }
-        }
-    }
-
+    // Clase JSON (Sin cambios, el formato Waveshare T=133 es correcto)
     private static class RobotCommand {
         @SerializedName("T") private int type;
         @SerializedName("X") private int yaw;
