@@ -20,6 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PanTilt"
+rootProject.name = "PanTiltSerial"
 include(":app")
  

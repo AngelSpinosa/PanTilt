@@ -9,7 +9,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.pantilt"
+        applicationId = "com.example.pantiltserial"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
